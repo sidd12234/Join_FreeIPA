@@ -1,6 +1,4 @@
-==============================================================================
   join-freeipa.sh  -  Join an Ubuntu workstation to FreeIPA
-==============================================================================
 
 WHAT IT IS
 ----------
@@ -34,11 +32,21 @@ REQUIREMENTS
 
 HOW TO RUN
 ----------
+  Options: for version 3
+        sudo bash join-freeipa.sh            menu: 1 = join, 2 = remove, q = quit
+        sudo bash join-freeipa.sh --join     join directly
+        sudo bash join-freeipa.sh --remove   remove this laptop from FreeIPA
+        sudo bash join-freeipa.sh --help     show the options
+
+  The menu also shows whether the laptop is currently joined, and to which
+  server.
+
+  To JOIN:
   1. Copy join-freeipa.sh to the laptop.
   2. Open a terminal in that folder and run:
 
         chmod 700 join-freeipa.sh
-        sudo bash join-freeipa.sh
+        sudo bash join-freeipa.sh            (then choose 1)
 
   3. When asked, type the short hostname for the laptop (e.g. lap-ali-01)
      and confirm the full name it shows.
@@ -113,6 +121,41 @@ SUMMARY
   On success it offers to reboot (Enter / no input = no reboot).
 
 
+REMOVING A LAPTOP FROM FREEIPA (option 2 or --remove)
+-----------------------------------------------------
+STEP 1 - Pre-flight checks
+  - If the laptop is not joined, says so and exits (nothing changed).
+  - Reads the laptop's hostname, realm and server from /etc/ipa/default.conf.
+  - Checks the IPA server is reachable. If not, the laptop is removed
+    locally only.
+  - Asks you to type "yes" to confirm. Anything else cancels.
+  - If the server is reachable, asks whether to also delete the host record
+    from the IPA server.
+
+STEP 2 - Leave the domain
+  - If you chose to delete the host record: logs in as asid (temporary
+    ticket) and runs  ipa host-del <fqdn> --updatedns  which removes the
+    host and its DNS records from IPA.
+  - Runs  ipa-client-install --uninstall --unattended  which removes the
+    keytab, SSSD / Kerberos / PAM settings and certificates, and restores
+    the files saved at join time. If you didn't delete the host record,
+    the host is disabled on the server but its entry is kept.
+  - If the laptop is still joined afterwards, the script stops with an error.
+
+STEP 3 - Verify the removal
+  - /etc/ipa/default.conf is gone
+  - no keys for the IPA realm remain in /etc/krb5.keytab
+  - IPA accounts no longer resolve through SSSD
+
+  Then a summary box shows the hostname, the realm it left, the server,
+  whether the host entry was deleted or kept, the checks and the run time,
+  and offers a reboot.
+
+  Not changed by removal: the hostname, /etc/hosts, and home folders of IPA
+  users in /home. Change the hostname with:
+        sudo hostnamectl set-hostname <name>
+
+
 SAFETY FEATURES
 ---------------
   - Automatic rollback: if the join fails (or you press Ctrl+C before it
@@ -122,6 +165,21 @@ SAFETY FEATURES
     (apt / dpkg / ipa-client-install), so nothing is left half-running.
   - If there is no keyboard input (Ctrl+D or stdin closed), the script
     stops instead of looping.
+
+
+LOOK AND FEEL (v2.0)
+--------------------
+  - Animated gradient "FREEIPA" logo, info card and loading bar at start.
+  - Each step has an icon, a STEP x/6 badge and an overall progress bar.
+  - Long tasks show a colour-cycling spinner, a bouncing scanner bar and
+    a mm:ss timer.
+  - Results appear as coloured OK / WARN / FAIL badges.
+  - On success: confetti animation, big "SUCCESS" logo, summary box with
+    total duration, and a 3-2-1 countdown if you choose to reboot.
+  - On terminals without 256 colours (or when output is redirected to a
+    file) everything falls back to plain text automatically.
+  - If colours look wrong on an older terminal, run:
+        sudo NO_TRUECOLOR=1 bash join-freeipa.sh
 
 
 FILES AND LOGS
@@ -151,7 +209,9 @@ TROUBLESHOOTING
         Hostname and /etc/hosts have already been rolled back.
   - Laptop was joined before
         Run the script again and choose [r]einstall.
-  - To leave the domain manually:
+  - To leave the domain:
+        sudo bash join-freeipa.sh --remove
+    or manually:
         sudo ipa-client-install --uninstall
 
 
@@ -164,3 +224,5 @@ SECURITY NOTES
     (ps) to other users on that laptop. Run the script when nobody else is
     logged in.
   - Change the asid password once all laptops have been joined.
+
+    
